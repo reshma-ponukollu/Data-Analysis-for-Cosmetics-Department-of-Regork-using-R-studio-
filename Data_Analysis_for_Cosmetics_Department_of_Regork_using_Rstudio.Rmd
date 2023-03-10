@@ -1,0 +1,182 @@
+---
+title: "Final_Project_Team8"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Analysis for Cosmetics Department of Regork {.tabset}
+## Introduction
+
+Hello Regork! We are a group of data scientists that are focusing on identifying certain traits in your Cosmetics department, and in-turn suggest your team ideas on how sales and revenue can be increased. We will help you narrow down to the product, identify your target customers and present you with strategies to better market your products to them. 
+
+We will use the complete datasets of the transactions and promotions, products and demographics, put together useful permutations and combinations of datasets and provide you with valuable analysis for your cosmetics department. 
+
+We will perform qualitative and quantitative data analysis and help you visualize product level data alongside demographics and promotions. We will also help you market your products using unique strategies which will help increase sales and profits. We will also help identify manufacturers to help them better handle demand and supply. 
+
+
+
+## Required Packages
+
+Below are the packages required to be able to replicate/ customize this report. 
+
+```{r message=FALSE}
+
+install.packages("completejourney", repos="https://cran.r-project.org/")
+install.packages("DT", repos="https://cran.r-project.org/")
+library(completejourney)#Retail shopping transactions for 2469 households
+library(dplyr) # transforming (joining, summarizing, etc.) data
+library(ggplot2)#visualizing data
+library(stringr)# evaluating regular expression to  match patterns
+library(lubridate)#to work with dates and times
+library(DT)# to display dataframes as tables on HTML pages
+library(scales)# to wrap format around axis labels
+```
+
+## Inititalizing datasets to dataframes
+
+```{r}
+all_transactions<-get_transactions()# loading complete datasets to a dataframe
+all_promotions<-get_promotions()# loading complete datasets to a dataframe
+```
+
+## Exploratory data analysis {.tabset}
+
+### Analysis of products and sales in over the year
+```{r}
+Y<-all_transactions%>%
+  inner_join(products)%>%
+  inner_join(coupons)%>%
+  inner_join(campaigns)%>% #Joining multiple dataframes
+  filter(str_detect(department, regex("COSMETIC", ignore_case = TRUE)))%>%
+  group_by(Month = month(transaction_timestamp,label=TRUE),product_category)%>%
+  summarise(total_sales =sum(sales_value))# Filtering and summarizing by sales value. 
+
+ggplot(data=Y, aes(x= Month, y=total_sales, group = product_category, colour = product_category))+
+  geom_line()+geom_point()+
+  labs(title = "Figure 1: Types of Cosmetics sold throughout the year",subtitle = " Monthwise Total Sales",x = "Months",y = "Total sales of Cosmetics")
+
+```
+
+The plot above shows the total sales of cosmetics over the course of the year differentiated by product category.
+In terms of total sales, we can depict that Makeup and Treatment are the most popular product categories and the other four products are far behind.
+One interesting aspect to observe is that the fragrances sales shoot up from the November month to the December month. Its probably because of the christmas eve when most people purchase scents and fragrances to gift their loved ones. 
+
+<h3> Analysis of fragrances spike in the month of December </h3>
+
+```{r}
+frag_dec<- products%>%
+  inner_join(all_transactions, by = "product_id") %>%
+  group_by(Month = month(transaction_timestamp, label=TRUE)) %>%
+  filter(str_detect(department, regex("COSMETIC", ignore_case = TRUE))) %>%
+  filter(str_detect(product_category, regex("FRAGRANCES", ignore_case = TRUE)))  %>%
+  filter(str_detect(Month, regex("Dec", ignore_case = TRUE)))%>%
+  group_by(product_type)%>%
+  summarize(Total_sales= sum(sales_value))%>%
+  arrange(desc(Total_sales))
+ggplot(data = frag_dec, aes(x = product_type, y = Total_sales)) + 
+geom_bar(stat="Identity", position="dodge", color = "black", fill="red")+
+  coord_cartesian(xlim = c(1,4), ylim = c(0,350))+
+  labs(title = "Figure 2: Total Sales of Fragrances in December",
+       x = "Fragrance Type",
+       y = "Value in $ of sales")+
+  scale_x_discrete(label = wrap_format(10))
+```
+
+
+We wanted to analyze the spike we saw in the first graph for the Monthly sales posted on all product categories. The spike is from designer fragrances mainly. If we put aside the miscellaneous category, PARFUMS DE COUER and REVLON fragrances have a very low sales value. We should come up with a way to promote these products as well. 
+
+
+### Analysis of Cosmetics Department by Quantity
+
+```{r echo=TRUE}
+quant_sales_in_cosmetics_dept <- products%>%
+  filter(str_detect(department, regex("COSMETIC", ignore_case = TRUE)))%>%
+  inner_join(all_transactions, by = "product_id") %>%
+  inner_join(demographics,by ="household_id")%>%#Joining transactions and demographics data
+  group_by(Age = age) %>% 
+  group_by(Age, Categories=product_category)%>%
+  summarise(total_quant = sum(quantity)) %>% # grouping by age and category and summarizing sales by quantity
+  arrange(desc(total_quant))
+datatable(quant_sales_in_cosmetics_dept, caption='Table 1: Age Wise Sales in Cosmetics Department')# converting a dataframe to an HTML table
+
+ggplot(data = quant_sales_in_cosmetics_dept, aes(x = Age, fill= Categories , y = total_quant)) + 
+  geom_bar(stat="Identity", position="dodge")+
+  coord_cartesian(xlim = c(1,7), ylim = c(0,800))+
+  labs(title = "Figure 3: AGE WISE SALES IN COSMETICS DEPARTMENT",
+       subtitle = "Age Groups, Categories vs Total Quantity",
+       x = "Age group",
+       y = "# of Cosmetics Sold by Product category")
+```
+
+
+It is evident from the graph above that Age Groups 35-44 and 45-54 bought the highest number of MAKEUP AND TREATMENT ITEMS. There are two ways of looking at this. One is a positive aspect, which says that our target audience can continue to be the age group of 35-54 and we can try to market several other products types to them. However, the fragrances are not being purchased by a lot of age groups. Its best to come up with a discounts on fragrances to be able to increase sales.  
+
+
+### Analysis of MakeUp and treatment products
+```{r}
+Makeup_and_treatment<-products%>%
+  filter(str_detect(department, regex("COSMETIC", ignore_case = TRUE)))%>%
+    filter(str_detect(product_category, regex("MAKEUP AND TREATMENT", ignore_case = TRUE)))%>%  
+  inner_join(all_transactions, by = "product_id") %>%
+  inner_join(demographics,by ="household_id")%>% #Joining transactions and demographics data
+  group_by(Age = age) %>% 
+  group_by(Age, Categories=product_category, Type=product_type)%>%
+  summarise(total_quant = sum(quantity)) %>% # Grouping by type and category and summarizing the sales in terms of quantity
+  arrange(desc(total_quant)) %>%
+  slice(1:5)# Getting the top 5 products purchased by age group
+  ggplot(data = Makeup_and_treatment, aes(x = Age , fill=Type, y = total_quant)) + 
+    geom_bar(stat="Identity", position="dodge")+
+    coord_cartesian(xlim = c(1,7), ylim = c(0,200))+
+    labs(title = "Figure 4: AGE-WISE SALES OF MAKEUP AND TREATMENT CATEGORY",
+         subtitle = "Age Groups, MAKEUP AND TREATMENT",
+         x = "Age group",
+         y = "# of MAKEUP AND TREATMENT ITEMS Sold") 
+
+```
+
+If we observe this graph carefully, we can clearly see that the same age group has higher purchases, but the top 5 products each of the group purchases are mostly inclined towards maybelline and covergirl products. To further analyze, we will deep dive to see which package size is being sold most. This will allow to give feedback to manufacturers on which products to manufacture more inorder to tackle demand and supply. At the same time, the sizes not being sold much can have reduced manufacturing and focus on other sizes which are being sold in larger quantities. 
+
+
+### Table containing sales by product type and manufacturer ID
+
+```{r}
+Product_sizes<- products%>%
+  filter(str_detect(department, regex("COSMETIC", ignore_case = TRUE)))%>%
+  filter(str_detect(product_category, regex("MAKEUP AND TREATMENT", ignore_case = TRUE)))%>%
+  filter(str_detect(product_type, regex("COVERGIRL|MAYBELLINE", ignore_case = TRUE)))%>%#Filtering to only analyze covergirl and maybelline products
+  filter(!is.na(package_size))%>%
+  inner_join(all_transactions, by = "product_id") %>%
+  group_by(product_type, package_size, manufacturer_id)%>%# Included manufacturer ID to help them predict demand and supply. 
+  summarise(Volume = sum(quantity))%>%
+  arrange(desc(Volume))
+datatable(Product_sizes, caption='Table 2:  Most Sold Product Sizes in Cosmetics Department: Makeup and treatment - Maybelline and Covergirl')
+
+
+```
+
+Great, now we have the manufacturer IDs. We can now go ahead by communicating this result with the manufacturers of maybelline and covergirl to help them predict sales for the next year. This will help the stores also manage their supply chain in a better way. Also, if we observe carefully, the maybelline product is mostly sold in that 1 CT package size. Covergirl on the other hand has different package sizes being sold. So, these sizes are something the manufacturers can specifically focus on.
+
+
+## Summary 
+* Our problem statement is to identify trends in the sale of products in the Cosmetics Department to be able to help Regork take better data-driven decisions for this department.
+* We have used the completejourney package which includes the promotions, transactions, demographics and the products data. We have employed data visualization functions to  depict interesting results that'll help the cosmetics department to enhance their sales by streamlining their marketing. 
+* Summary of graphs and tables depicted.
+  + Figure 1: Makeup and treatment products sell the most, while the other product lines lag behind in terms of sales. Interesting thing to note is that fragrances sales spike in the month of December probably due to Christmas. We will drill down to see the products that didn't go well in sales during this period to better promote them next year.
+  + Figure 2: Here, we have used the demographics data to identify the usual target audience for your products. Its interesting to note that the age groups 35-54 have purchased a lot in the makeup product category line. 
+  + Figure 3: In here, we've drilled down on top of Figure 2 to see what are the top 5 products purchased by the same age groups. Maybelline and Covergirl are the standouts in this regard. 
+  + Table 2: This table was visualized to assist Regork identify the manufacturers that manufacture a specific size for the maybelline and covergirl product range. We have aggregated the sales by quantity to show that particular package sizes sell more than certain others. However, the overall sales of covergirl across various package sizes is still higher. 
+
+##### Our Proposal
+* We suggest you target other audiences as well, perform some market research to cater needs of different age groups. Income range is usually lower for the other categories, so providing bigger discounts on products that they're interested in will enhance their sales well. This will attract buyers from 35-54 as well. 
+* Increased focus on product lines like bath, cosmetic accessories and fragrances is required. We will have to find intrinsic details - probably perform a sentiment analysis to see why customers are not purchasing these products. 
+* Report the table to the manufacturers of maybelline, covergirl and various fragrances to help them visualize the demand and get them to increase the supply. 
+
+##### Limitations
+* We wanted to identify package sizes that sell a lot. However, the data set had a lot of 'NA' data which reduced our scope to the data that's available to use. I believe we would've had more interesting facts if there was no such data quality issue.
+* Our analysis couldn't find out why only the makeup sales soar up while the others are falling behind. Probably with further analysis and some customer feedbacks to support, we'll be able to better analyze that aspect as well.
+* We were looking for geographical metrics to plot heat maps where maximum sales occur. Once we have that data, we can build on top of this report to better target audience based on their location attribute. 
+
